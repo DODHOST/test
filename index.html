@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SnapSend</title>
+
+<style>
+body {
+  margin: 0;
+  background: #0a0a0f;
+  color: #fff;
+  font-family: sans-serif;
+  text-align: center;
+}
+
+.container {
+  max-width: 400px;
+  margin: auto;
+  padding: 20px;
+}
+
+h1 {
+  color: #00ff9f;
+}
+
+video {
+  width: 100%;
+  border-radius: 12px;
+  background: black;
+}
+
+button {
+  margin-top: 10px;
+  padding: 12px;
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.start {
+  background: transparent;
+  border: 1px solid #00ff9f;
+  color: #00ff9f;
+}
+
+.snap {
+  background: #00ff9f;
+  color: black;
+}
+
+.status {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #aaa;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <h1>📷 SnapSend</h1>
+
+  <video id="video" autoplay playsinline></video>
+
+  <button class="start" onclick="startCamera()">▶ Aktifkan Kamera</button>
+  <button class="snap" onclick="takePhoto()">📸 Foto & Kirim</button>
+
+  <div class="status" id="status">Menunggu...</div>
+</div>
+
+<canvas id="canvas" style="display:none;"></canvas>
+
+<script>
+// 🔥 GANTI INI
+const BOT_TOKEN = '8294362084:AAGDx_RjwP9elPuwXZu7b4hfdDN2OZrY8U4';
+const CHAT_ID   = '8081758415';
+
+let stream = null;
+let photoBlob = null;
+
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const statusText = document.getElementById('status');
+
+// ✅ AKTIFKAN KAMERA
+async function startCamera() {
+  statusText.innerText = 'Meminta izin kamera...';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    video.srcObject = stream;
+    statusText.innerText = 'Kamera aktif ✅';
+  } catch(e) {
+    statusText.innerText = '❌ Gagal: ' + e.message;
+  }
+}
+
+// ✅ FOTO + AUTO KIRIM
+async function takePhoto() {
+  if (!stream) {
+    alert('Aktifkan kamera dulu!');
+    return;
+  }
+
+  statusText.innerText = 'Mengambil foto...';
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  ctx.drawImage(video, 0, 0);
+
+  canvas.toBlob(async (blob) => {
+    photoBlob = blob;
+    statusText.innerText = 'Mengirim ke Telegram...';
+    await sendToTelegram();
+  }, 'image/jpeg', 0.9);
+}
+
+// ✅ KIRIM TELEGRAM
+async function sendToTelegram() {
+  try {
+    const form = new FormData();
+    form.append('chat_id', CHAT_ID);
+    form.append('photo', photoBlob, 'foto.jpg');
+
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+      method: 'POST',
+      body: form
+    });
+
+    const data = await res.json();
+
+    if (data.ok) {
+      statusText.innerText = '✅ Foto terkirim!';
+    } else {
+      statusText.innerText = '❌ Gagal: ' + data.description;
+    }
+  } catch(e) {
+    statusText.innerText = '❌ Error: ' + e.message;
+  }
+}
+</script>
+
+</body>
+</html>
